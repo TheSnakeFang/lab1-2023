@@ -40,23 +40,28 @@ def box(
         TypeError: `alpha` isn't a program
     """
     if max_depth < 1:
-        return z3.BoolVal(False) if depth_exceed_strict else z3.BoolVal(True)
+        return z3.unknown if depth_exceed_strict else z3.BoolVal(True)
 
     match alpha:
         case tn.Skip():
-            return z3.BoolVal(True)
+            return postcondition
         case tn.Asgn(name, e):
-            return z3.BoolVal(True)
+            return z3.substitute(postcondition, [(term_enc(tn.Var(name)), term_enc(e))])
         case tn.Seq(alpha_p, beta_p):
-            return z3.BoolVal(True)
+            return box(alpha_p, box(beta_p, postcondition))
         case tn.If(q, alpha_p, beta_p):
-            return z3.BoolVal(True)
+            encoding = fmla_enc(q)
+            alpha_conv = box(alpha_p, postcondition, max_depth - 1)
+            beta_conv = box(beta_p, postcondition, max_depth - 1)
+            return z3.Or(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), beta_conv))
         case tn.While(q, alpha_p):
-            return z3.BoolVal(True)
+            encoding = fmla_enc(q)
+            alpha_conv = box(alpha_p, postcondition, max_depth - 1)
+            return z3.Or(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), postcondition))
         case tn.Output(e):
-            return z3.BoolVal(True)
+            return postcondition
         case tn.Abort():
-            return z3.BoolVal(True)
+            return postcondition
         case _:
             raise TypeError(
                 f"box got {type(alpha)} ({alpha}), not Prog"
