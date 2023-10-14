@@ -42,8 +42,7 @@ def box(
     """
     if max_depth < 1:
         return z3.BoolVal(False) if depth_exceed_strict else z3.BoolVal(True)
-    
-    # print(stringify(alpha))
+    # print("box alpha, post", stringify(alpha))
 
     match alpha:
         case tn.Skip():
@@ -69,9 +68,3 @@ def box(
             raise TypeError(
                 f"box got {type(alpha)} ({alpha}), not Prog"
             )
-
-alpha = tn.Asgn('x', tn.Const(1))
-post = tn.LtF(tn.Var('x'), tn.Const(0))
-pre = box(alpha, fmla_enc(post))
-print('Program:', stringify(alpha))
-print('Verification condition:', pre)

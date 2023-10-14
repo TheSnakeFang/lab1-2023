@@ -5,10 +5,9 @@ from symbolic import box, Result
 import z3
 from tinyscript_util import (
     check_sat,
-    stringify,
     fmla_enc,
-    vars_prog,
-    term_stringify
+    term_stringify,
+    state_from_z3_model
 )
 import tinyscript as tn
 
@@ -118,18 +117,20 @@ def symbolic_check(
 
     res, model = check_sat([z3.Not(weakest_pre)], timeout)
 
-    print(stringify(alpha_p))
+    # print(stringify(alpha_p))
     print("step_bound:", step_bound)
     print("maxdepth:", max_depth)
     print("res, model:", res, model)
     print("boolref:", weakest_pre)
-    print("test1", tn.Var(CNR_VAR))
+    print("test1", term_stringify(tn.Var(CNR_VAR)))
     print("test",  (tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))))
     print("CNTRVAR:", CNR_VAR)
 
     if (res == z3.unsat):
         return Result.Satisfies
     elif (res == z3.sat):
+            state = state_from_z3_model(alpha_p, model)
+            print(state)
             return Result.Violates
     return Result.Unknown
     
