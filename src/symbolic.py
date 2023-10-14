@@ -41,9 +41,9 @@ def box(
         TypeError: `alpha` isn't a program
     """
     if max_depth < 1:
-        return z3.unknown if depth_exceed_strict else z3.BoolVal(True)
+        return z3.BoolVal(False) if depth_exceed_strict else z3.BoolVal(True)
     
-    print(stringify(alpha))
+    # print(stringify(alpha))
 
     match alpha:
         case tn.Skip():
@@ -58,8 +58,9 @@ def box(
             beta_conv = box(beta_p, postcondition, max_depth - 1)
             return z3.And(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), beta_conv))
         case tn.While(q, alpha_p):
-            unwound = tn.If(q, tn.Seq(alpha_p, tn.While(q, alpha_p)), tn.Skip())
-            return box(unwound, postcondition, max_depth - 1)
+            encoding = fmla_enc(q)
+            unwound_post = box(alpha_p, box(tn.While(q, alpha_p), postcondition, max_depth - 1), max_depth - 1)
+            return z3.And(z3.Implies(encoding, unwound_post), z3.Implies(z3.Not(encoding), postcondition))
         case tn.Output(e):
             return postcondition
         case tn.Abort():
@@ -68,3 +69,9 @@ def box(
             raise TypeError(
                 f"box got {type(alpha)} ({alpha}), not Prog"
             )
+
+alpha = tn.Asgn('x', tn.Const(1))
+post = tn.LtF(tn.Var('x'), tn.Const(0))
+pre = box(alpha, fmla_enc(post))
+print('Program:', stringify(alpha))
+print('Verification condition:', pre)

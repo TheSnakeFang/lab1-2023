@@ -2,19 +2,25 @@
 
 from typing import Optional
 from symbolic import box, Result
+import z3
 from tinyscript_util import (
     check_sat,
-    stringify
+    stringify,
+    fmla_enc,
+    vars_prog,
+    term_stringify
 )
 import tinyscript as tn
 
+CNR_VAR = '#counter'
+
 def add_instrumentation(alpha: tn.Prog, inv: tn.Formula) -> tn.Prog:
-    increment_counter = tn.Asgn("#counter", tn.Sum(tn.Var("#counter"), tn.Const(1)))
+    increment_counter = tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))
     # print("add_instrumentaion_alpha:", stringify(alpha))
     match alpha:
         # assignments represent a step, so we need to add instrumentation
         case tn.Asgn(name, aexp):
-            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Asgn(name, aexp))), inv)
+            return tn.Seq(increment_counter, tn.Asgn(name, aexp))
         # composition is not listed as a step
         case tn.Seq(alpha_p, beta_p):
             ins_alpha = add_instrumentation(alpha_p, inv)
@@ -30,11 +36,11 @@ def add_instrumentation(alpha: tn.Prog, inv: tn.Formula) -> tn.Prog:
             ins_alpha = add_instrumentation(alpha_p, inv)
             return tn.While(q, ins_alpha)
         case tn.Skip(): # this is a step
-            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Skip()), inv))
+            return tn.Seq(increment_counter, tn.Skip())
         case tn.Abort(): # this is a step
-            return tn.Seq(inv, tn.Seq(increment_counter, tn.Abort()))
+            return tn.Seq(increment_counter, tn.Abort())
         case tn.Output(e): # this is a step
-            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Output(e))), inv)
+            return tn.Seq(increment_counter, tn.Output(e))
         case _:
             raise TypeError(
                 f"instrument got {type(alpha)} ({alpha}), not Prog"
@@ -59,16 +65,16 @@ def instrument(alpha: tn.Prog, step_bound: Optional[int]=None) -> tn.Prog:
     """
 
 	# counter?
-    counter = tn.Asgn("#counter", tn.Const(0)) 
+    counter = tn.Asgn(CNR_VAR, tn.Const(0))
 	
-    instr = add_instrumentation(alpha, tn.LtF(tn.Var("#counter"), tn.Const(step_bound)))
-    print(stringify(instr))
+    instr = add_instrumentation(alpha, tn.LtF(tn.Var(CNR_VAR), tn.Const(step_bound)))
+    #print(stringify(instr))
     return tn.Seq(counter, instr)
 
 def symbolic_check(
     alpha: tn.Prog, 
     step_bound: int,
-    max_depth: int=1,
+    max_depth: int=100,
     timeout: int=10) -> Result:
     """
     Uses the box modality and a satisfiability solver to determine
@@ -103,9 +109,30 @@ def symbolic_check(
               at least `step_bound` steps.
     """
 
-    res, model = check_sat(box(instrument(alpha, step_bound), tn.Const(False)), timeout)
-    return res
+    alpha_p = instrument(alpha, step_bound)
+    post = tn.LtF(tn.Var(CNR_VAR), tn.Const(step_bound))
 
+    # print("varsprog", vars_prog(alpha_p))
+
+    weakest_pre = box(alpha_p, fmla_enc(post), max_depth, False)
+
+    res, model = check_sat([z3.Not(weakest_pre)], timeout)
+
+    print(stringify(alpha_p))
+    print("step_bound:", step_bound)
+    print("maxdepth:", max_depth)
+    print("res, model:", res, model)
+    print("boolref:", weakest_pre)
+    print("test1", tn.Var(CNR_VAR))
+    print("test",  (tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))))
+    print("CNTRVAR:", CNR_VAR)
+
+    if (res == z3.unsat):
+        return Result.Satisfies
+    elif (res == z3.sat):
+            return Result.Violates
+    return Result.Unknown
+    
 if __name__ == "__main__":
     from parser import parse, fmla_parse
     import sys
