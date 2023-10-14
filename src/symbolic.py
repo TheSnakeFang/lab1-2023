@@ -1,7 +1,8 @@
 from tinyscript_util import (
     fmla_enc,
     simplify,
-    term_enc
+    term_enc,
+    stringify
 )
 from enum import Enum
 import tinyscript as tn
@@ -41,6 +42,8 @@ def box(
     """
     if max_depth < 1:
         return z3.unknown if depth_exceed_strict else z3.BoolVal(True)
+    
+    print(stringify(alpha))
 
     match alpha:
         case tn.Skip():
@@ -53,11 +56,10 @@ def box(
             encoding = fmla_enc(q)
             alpha_conv = box(alpha_p, postcondition, max_depth - 1)
             beta_conv = box(beta_p, postcondition, max_depth - 1)
-            return z3.Or(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), beta_conv))
+            return z3.And(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), beta_conv))
         case tn.While(q, alpha_p):
-            encoding = fmla_enc(q)
-            alpha_conv = box(alpha_p, postcondition, max_depth - 1)
-            return z3.Or(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), postcondition))
+            unwound = tn.If(q, tn.Seq(alpha_p, tn.While(q, alpha_p)), tn.Skip())
+            return box(unwound, postcondition, max_depth - 1)
         case tn.Output(e):
             return postcondition
         case tn.Abort():

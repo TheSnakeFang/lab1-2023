@@ -8,51 +8,13 @@ from tinyscript_util import (
 )
 import tinyscript as tn
 
-SETUP_VAR = '#inv_established'
-INV_VAR = '#inv_true'
-
-def invariant_instrument(Q: BoolRef) -> tn.Prog:
-    """
-    Construct instrumentation to enforce an invariant P,
-    to be placed immediately before an assignment alpha.
-    
-    Args:
-        Q (z3.BoolRef): A box-free formula that is equivalent
-            to [alpha] P.
-    
-    Returns:
-        tn.Prog: A tinyscript program that will set the
-            policy variables appropriately to enforce the
-            invariant P.
-    """
-    true_ins = tn.If(tn.EqF(tn.Var(SETUP_VAR), tn.Const(0)),
-                     tn.Seq(tn.Asgn(INV_VAR, tn.Const(1)),
-                            tn.Asgn(SETUP_VAR, tn.Const(1))),
-                     tn.Skip())
-    false_ins = tn.Asgn(INV_VAR, tn.Const(0))
-    if is_true(Q):
-        return true_ins
-    elif is_false(Q):
-        return false_ins
-    else:
-        return tn.If(z3_to_fmla(Q),
-                     true_ins,
-                     false_ins)
-
 def add_instrumentation(alpha: tn.Prog, inv: tn.Formula) -> tn.Prog:
+    increment_counter = tn.Asgn("#counter", tn.Sum(tn.Var("#counter"), tn.Const(1)))
+    # print("add_instrumentaion_alpha:", stringify(alpha))
     match alpha:
         # assignments represent a step, so we need to add instrumentation
         case tn.Asgn(name, aexp):
-            pre = box(alpha, fmla_enc(inv))
-            # pre will be equivalent to inv if and only if the assignment
-            # has no effect on whether the invariant will be violated or
-            # established, so we don't add instrumentation if this is
-            # the case.
-            if not fmlas_equiv(fmla_enc(inv), pre):
-                ins = invariant_instrument(pre)
-                if ins != tn.Skip():
-                    return tn.Seq(ins, alpha)
-            return alpha
+            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Asgn(name, aexp))), inv)
         # composition is not listed as a step
         case tn.Seq(alpha_p, beta_p):
             ins_alpha = add_instrumentation(alpha_p, inv)
@@ -67,14 +29,16 @@ def add_instrumentation(alpha: tn.Prog, inv: tn.Formula) -> tn.Prog:
         case tn.While(q, alpha_p):
             ins_alpha = add_instrumentation(alpha_p, inv)
             return tn.While(q, ins_alpha)
-        # skips do nothing for invariants, so no instrumentation
         case tn.Skip(): # this is a step
-            return alpha 
+            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Skip()), inv))
+        case tn.Abort(): # this is a step
+            return tn.Seq(inv, tn.Seq(increment_counter, tn.Abort()))
+        case tn.Output(e): # this is a step
+            return tn.Seq(tn.Seq(inv, tn.Seq(increment_counter, tn.Output(e))), inv)
         case _:
             raise TypeError(
-                "instrument got {type(alpha)} ({alpha}), not Prog"
+                f"instrument got {type(alpha)} ({alpha}), not Prog"
             )
-        # where is output and abort?
         
 def instrument(alpha: tn.Prog, step_bound: Optional[int]=None) -> tn.Prog:
     """
@@ -95,15 +59,11 @@ def instrument(alpha: tn.Prog, step_bound: Optional[int]=None) -> tn.Prog:
     """
 
 	# counter?
-	Counter = tn.Var('#counter, 0') 
+    counter = tn.Asgn("#counter", tn.Const(0)) 
 	
-    instr = add_instrumentation(alpha, #COUNTER < STEP_BOUND) 
-    initialize = tn.If(instr,
-                       tn.Seq(tn.Asgn(SETUP_VAR, tn.Const(1)),
-                              tn.Asgn(INV_VAR, tn.Const(1))),
-                       tn.Seq(tn.Asgn(SETUP_VAR, tn.Const(0)),
-                              tn.Asgn(INV_VAR, tn.Const(0))))
-    return tn.Seq(initialize, instr)
+    instr = add_instrumentation(alpha, tn.LtF(tn.Var("#counter"), tn.Const(step_bound)))
+    print(stringify(instr))
+    return tn.Seq(counter, instr)
 
 def symbolic_check(
     alpha: tn.Prog, 
@@ -142,7 +102,9 @@ def symbolic_check(
               not return a state that caused the interpreter to execute
               at least `step_bound` steps.
     """
-    return Result.Unknown
+
+    res, model = check_sat(box(instrument(alpha, step_bound), tn.Const(False)), timeout)
+    return res
 
 if __name__ == "__main__":
     from parser import parse, fmla_parse
