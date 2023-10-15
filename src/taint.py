@@ -18,7 +18,24 @@ import z3
 TAINTED = '#was_tainted'
 
 def add_instrumentation(alpha: tn.Prog) -> tn.Prog:
-    # print("add_instrumentaion_alpha:", stringify(alpha))
+    """
+    This function takes a TinyScript program alpha and returns a new program
+    with added instrumentation code to check for the tainted analysis policy. 
+    Specifically, it instruments the code to identify if any variable is being 
+    used before it is defined.
+    
+    Args:
+        alpha (tn.Prog): Program to instrument
+    
+    Returns:
+
+    A TinyScript program with the following instrumentation added:
+        - Assignment (tn.Asgn): Adds conditional checks to propagate 
+          taint status from source variables to the assigned variable.
+          Removes taint from assignee if all sources are untainted.
+        - Output (tn.Output): Adds checks to identify if any variable 
+          in the output expression is tainted and should be flagged.
+    """
     match alpha:
         # assignments create a new variable, so we need to add instrumentation
         case tn.Asgn(name, aexp):
@@ -49,7 +66,6 @@ def add_instrumentation(alpha: tn.Prog) -> tn.Prog:
             return tn.Abort()
         case tn.Output(e): 
             output = vars_term(e)
-            # print("Output output", output)
             if output != []:
                 check = tn.If(tn.EqF(tn.Var(f'#taint_{output[0]}'), tn.Const(1)), tn.Asgn(TAINTED, tn.Const(1)), tn.Skip())
                 for i in output[1:]:
@@ -128,23 +144,13 @@ def symbolic_check(
     alpha_p = instrument(alpha)
     post = tn.EqF(tn.Var(TAINTED), tn.Const(0))
 
-    # print("varsprog", vars_prog(alpha_p))
-
     weakest_pre = box(alpha_p, fmla_enc(post), max_depth, False)
 
     res, model = check_sat([z3.Not(weakest_pre)], timeout)
 
-    # print(stringify(alpha_p))
-    # print("fmla_enc(post)", fmla_enc(post))
-    # print("step_bound:", step_bound)
-    # print("maxdepth:", max_depth)
-    # print("weakest_pre: ", weakest_pre)
-
     if (res == z3.unsat):
         return Result.Satisfies
     elif (res == z3.sat):
-            # state = state_from_z3_model(alpha_p, model)
-            # print(state)
             return Result.Violates
     return Result.Unknown
 

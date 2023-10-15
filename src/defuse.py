@@ -15,7 +15,23 @@ import z3
 UNDEF = '#undef'
 
 def add_instrumentation(alpha: tn.Prog) -> tn.Prog:
-    # print("add_instrumentaion_alpha:", stringify(alpha))
+    """
+    This function takes a TinyScript program alpha and returns a new program
+    with added instrumentation code to check for the "define-before-use" policy. 
+    Specifically, it instruments the code to identify if any variable is being 
+    used before it is defined.
+    
+    Args:
+        alpha (tn.Prog): Program to instrument
+    
+    Returns:
+
+    A TinyScript program with the following instrumentation added:
+        - Assignment (tn.Asgn): Adds a sequence to mark the variable as defined 
+          before executing the original assignment statement.
+        - Output (tn.Output): Adds checks to ensure that the variables 
+          in the output expression are defined before they are used.
+    """
     match alpha:
         # assignments create a new variable, so we need to add instrumentation
         case tn.Asgn(name, aexp):

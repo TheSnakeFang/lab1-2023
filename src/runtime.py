@@ -13,26 +13,43 @@ import tinyscript as tn
 
 CNR_VAR = '#counter'
 
-def add_instrumentation(alpha: tn.Prog, inv: tn.Formula) -> tn.Prog:
+def add_instrumentation(alpha: tn.Prog) -> tn.Prog:
+    """
+    This function takes a TinyScript program alpha and returns a new program
+    with added instrumentation code to check for the Bounded Execution policy. 
+    Specifically, it instruments the code to increment a counter every time a
+    "step" occurs, where a step is defined as an assignment, output, abort, or
+    skip.
+    
+    Args:
+        alpha (tn.Prog): Program to instrument
+    
+    Returns:
+
+    A TinyScript program with the following instrumentation added:
+        - Assignment (tn.Asgn): Adds a sequence to mark the variable as defined 
+          before executing the original assignment statement.
+        - Output (tn.Output): Adds checks to ensure that the variables 
+          in the output expression are defined before they are used.
+    """
     increment_counter = tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))
-    # print("add_instrumentaion_alpha:", stringify(alpha))
     match alpha:
         # assignments represent a step, so we need to add instrumentation
         case tn.Asgn(name, aexp):
             return tn.Seq(increment_counter, tn.Asgn(name, aexp))
         # composition is not listed as a step
         case tn.Seq(alpha_p, beta_p):
-            ins_alpha = add_instrumentation(alpha_p, inv)
-            ins_beta = add_instrumentation(beta_p, inv)
+            ins_alpha = add_instrumentation(alpha_p)
+            ins_beta = add_instrumentation(beta_p)
             return tn.Seq(ins_alpha, ins_beta)
         # conditionals are also not steps
         case tn.If(p, alpha_p, beta_p):
-            ins_alpha = add_instrumentation(alpha_p, inv)
-            ins_beta = add_instrumentation(beta_p, inv)
+            ins_alpha = add_instrumentation(alpha_p)
+            ins_beta = add_instrumentation(beta_p)
             return tn.If(p, ins_alpha, ins_beta)
         # same with while loops
         case tn.While(q, alpha_p):
-            ins_alpha = add_instrumentation(alpha_p, inv)
+            ins_alpha = add_instrumentation(alpha_p)
             return tn.While(q, ins_alpha)
         case tn.Skip(): # this is a step
             return tn.Seq(increment_counter, tn.Skip())
@@ -66,8 +83,7 @@ def instrument(alpha: tn.Prog, step_bound: Optional[int]=None) -> tn.Prog:
 	# counter?
     counter = tn.Asgn(CNR_VAR, tn.Const(0))
 	
-    instr = add_instrumentation(alpha, tn.LtF(tn.Var(CNR_VAR), tn.Const(step_bound)))
-    #print(stringify(instr))
+    instr = add_instrumentation(alpha)
     return tn.Seq(counter, instr)
 
 def symbolic_check(
@@ -117,20 +133,9 @@ def symbolic_check(
 
     res, model = check_sat([z3.Not(weakest_pre)], timeout)
 
-    # print(stringify(alpha_p))
-    # print("step_bound:", step_bound)
-    # print("maxdepth:", max_depth)
-    # print("res, model:", res, model)
-    # print("boolref:", weakest_pre)
-    # print("test1", term_stringify(tn.Var(CNR_VAR)))
-    # print("test",  (tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))))
-    # print("CNTRVAR:", CNR_VAR)
-
     if (res == z3.unsat):
         return Result.Satisfies
     elif (res == z3.sat):
-            # state = state_from_z3_model(alpha_p, model)
-            # print(state)
             return Result.Violates
     return Result.Unknown
     
