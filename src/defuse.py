@@ -143,7 +143,7 @@ def symbolic_check(
         return Result.Satisfies
     elif (res == z3.sat):
         state = state_from_z3_model(alpha_p, model)
-        (s, m, i) = interp.exc(state, alpha_p, max_depth + 1, quiet = True)
+        (s, m, i) = interp.exc(state, alpha_p, max_depth, quiet = True)
         if (i == 0 and interp.term_exc(s, tn.Var(UNDEF)) == 0):
             return Result.Unknown
         else: return Result.Violates
