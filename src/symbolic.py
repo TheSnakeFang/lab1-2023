@@ -42,7 +42,7 @@ def box(
     """
     if max_depth < 1:
         return z3.BoolVal(False) if depth_exceed_strict else z3.BoolVal(True)
-    # print("box alpha, post", stringify(alpha))
+    # print("box alpha", stringify(alpha))
 
     match alpha:
         case tn.Skip():
@@ -55,7 +55,7 @@ def box(
             encoding = fmla_enc(q)
             alpha_conv = box(alpha_p, postcondition, max_depth - 1)
             beta_conv = box(beta_p, postcondition, max_depth - 1)
-            return z3.And(z3.And(encoding, alpha_conv), z3.And(z3.Not(encoding), beta_conv))
+            return z3.And(z3.Implies(encoding, alpha_conv), z3.And(z3.Implies(z3.Not(encoding), beta_conv)))
         case tn.While(q, alpha_p):
             encoding = fmla_enc(q)
             unwound_post = box(alpha_p, box(tn.While(q, alpha_p), postcondition, max_depth - 1), max_depth - 1)
@@ -68,3 +68,19 @@ def box(
             raise TypeError(
                 f"box got {type(alpha)} ({alpha}), not Prog"
             )
+        
+# CNR_VAR = '#counter'
+
+# alpha = tn.Asgn(CNR_VAR, tn.Const(0))
+
+# post = tn.LtF(tn.Var(CNR_VAR), tn.Const(1))
+              
+# pre = box(alpha, fmla_enc(post))
+
+# print('Verification condition:', pre)
+
+# alpha = tn.Asgn(CNR_VAR, tn.Sum(tn.Var(CNR_VAR), tn.Const(1)))
+
+# pre = box(alpha, fmla_enc(post))
+
+# print('Verification condition:', pre)
