@@ -6,7 +6,6 @@ import z3
 from tinyscript_util import (
     check_sat,
     fmla_enc,
-    term_stringify,
     state_from_z3_model
 )
 import tinyscript as tn
@@ -89,7 +88,7 @@ def instrument(alpha: tn.Prog, step_bound: Optional[int]=None) -> tn.Prog:
 def symbolic_check(
     alpha: tn.Prog, 
     step_bound: int,
-    max_depth: int=100,
+    max_depth: int=99,
     timeout: int=10) -> Result:
     """
     Uses the box modality and a satisfiability solver to determine

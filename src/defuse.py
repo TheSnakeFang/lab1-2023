@@ -3,7 +3,6 @@
 from symbolic import box, Result
 from tinyscript_util import (
     check_sat,
-    stringify,
     vars_term,
     vars_prog,
     vars_formula,
@@ -103,7 +102,7 @@ def instrument(alpha: tn.Prog) -> tn.Prog:
 
 def symbolic_check(
     alpha: tn.Prog, 
-    max_depth: int=1,
+    max_depth: int=99,
     timeout: int=10
 ) -> Result:
     """
@@ -134,15 +133,9 @@ def symbolic_check(
     alpha_p = instrument(alpha)
     post = tn.EqF(tn.Var(UNDEF), tn.Const(0))
 
-    # print("varsprog", vars_prog(alpha_p))
-
     weakest_pre = box(alpha_p, fmla_enc(post), max_depth, False)
 
     res, model = check_sat([z3.Not(weakest_pre)], timeout)
-
-    # print(stringify(alpha_p))
-    # print("step_bound:", step_bound)
-    # print("maxdepth:", max_depth)
 
     if (res == z3.unsat):
         return Result.Satisfies

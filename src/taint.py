@@ -5,7 +5,6 @@ from tinyscript_util import (
     check_sat,
     fmla_enc,
     state_from_z3_model,
-    stringify,
     vars_formula,
     vars_prog,
     vars_term,
@@ -106,14 +105,13 @@ def instrument(alpha: tn.Prog, source_prefix: str='sec_') -> tn.Prog:
             create = tn.Seq(tn.Asgn(f'#taint_{i}', tn.Const(1)), create)
         else: create = tn.Seq(tn.Asgn(f'#taint_{i}', tn.Const(0)), create)
     instr = add_instrumentation(alpha)
-    #print(stringify(instr))
-    
+   
     return tn.Seq(counter, tn.Seq(create, instr))
 
 def symbolic_check(
     alpha: tn.Prog, 
     source_prefix: str='sec_', 
-    max_depth: int=1,
+    max_depth: int=99,
     timeout: int=10) -> Result:
     """
     Uses the box modality and a satisfiability solver to determine
@@ -151,7 +149,7 @@ def symbolic_check(
     if (res == z3.unsat):
         return Result.Satisfies
     elif (res == z3.sat):
-            return Result.Violates
+        return Result.Violates
     return Result.Unknown
 
 if __name__ == "__main__":
