@@ -46,7 +46,7 @@ def add_instrumentation(alpha: tn.Prog) -> tn.Prog:
                 for i in output[1:]:
                     check = tn.If(tn.EqF(tn.Var(f'#taint_{i}'), tn.Const(1)), tn.Asgn(f'#taint_{name}', tn.Const(1)), check)
                 return tn.Seq(check, tn.Asgn(name, aexp))
-            return tn.Asgn(name, aexp)
+            return tn.Seq((tn.Asgn(f'#taint_{name}', tn.Const(0))), tn.Asgn(name, aexp))
         case tn.Seq(alpha_p, beta_p):
             ins_alpha = add_instrumentation(alpha_p)
             ins_beta = add_instrumentation(beta_p)
